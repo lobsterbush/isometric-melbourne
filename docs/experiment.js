@@ -8,6 +8,9 @@
  *   seed   integer seed; defaults to a hash of study + pid
  *   mode   "survey" (default; posts data to the embedding page) or "lab" (stores data in this browser)
  *
+ * Studies with a "home" block ask the participant for their address first. A "place" attribute then
+ * puts each option on their own street, a set distance away, or elsewhere in Melbourne.
+ *
  * Output is one row per option per task (long format), clustered by pid.
  */
 (async function () {
@@ -87,9 +90,50 @@
   const attributes = (study.attributes || []).filter(a => !hidden.has(a.id));
   const attrOrder = study.randomizeAttributeOrder ? shuffle(r, attributes) : attributes;
 
+  // ---------- home location and built-up mask ----------
+  const homeCfg = arm.home === false ? null : (study.home || null);
+  let home = null, mask = null;
+  if (meta.mask) {
+    try {
+      const img = new Image(); img.src = meta.mask.file; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      mask = { w: img.width, h: img.height, data: g.getImageData(0, 0, img.width, img.height).data };
+    } catch (e) { mask = null; }
+  }
+  const onMap = p => p.x >= 0 && p.x < meta.width && p.y >= 0 && p.y < meta.height;
+  function builtUp(lon, lat) {
+    const p = project(lon, lat);
+    if (!onMap(p)) return false;
+    if (!mask) return true;
+    const mx = Math.floor(p.x / meta.mask.cellX), my = Math.floor(p.y / meta.mask.cellY);
+    return mask.data[(my * mask.w + mx) * 4] > 127;
+  }
+  function metres(a, b) {
+    const k = Math.cos((a.lat + b.lat) / 2 * Math.PI / 180);
+    return Math.hypot((a.lon - b.lon) * 111320 * k, (a.lat - b.lat) * 110574);
+  }
+  function resolvePlace(level) {
+    if (level.pool) {
+      const far = study.locations.filter(l => metres(l, home) >= (level.minDistance || 0));
+      return Object.assign({}, pick(r, far.length ? far : study.locations));
+    }
+    const [d0, d1] = [].concat(level.distance ?? 0);
+    if (!d0 && !d1) return { lon: home.lon, lat: home.lat, name: level.id, fromHome: true };
+    let cand = null;
+    for (let tries = 0; tries < 60; tries++) {
+      const d = d0 + r() * ((d1 ?? d0) - d0), b = r() * 2 * Math.PI;
+      const [lon, lat] = shift(home.lon, home.lat, d * Math.sin(b), d * Math.cos(b));
+      cand = { lon, lat, name: level.id, fromHome: true };
+      if (builtUp(lon, lat)) return cand;
+    }
+    return cand;
+  }
+
   // ---------- build the task list ----------
   const optionById = Object.fromEntries((study.options || []).map(o => [o.id, o]));
   let tasks = [], setId = '';
+  function buildTasks() {
   if (study.design === 'sets') {
     // Explicit choice sets: each set is a list of tasks, each task a list of option ids.
     const sets = study.choiceSets || [];
@@ -103,6 +147,7 @@
   } else {
     // Conjoint: profiles drawn independently for each option in each task.
     const n = study.optionsPerTask || 2;
+    const placeAttr = attributes.find(a => a.type === 'place');
     const banned = study.restrictions || [];
     const allowed = lv => !banned.some(rule => Object.entries(rule).every(([k, v]) => lv[k] === v));
     const draw = () => { for (let tries = 0; tries < 200; tries++) {
@@ -115,16 +160,21 @@
       for (let o = 0; o < n; o++) {
         let lv, guard = 0;
         do { lv = draw(); } while (opts.some(p => JSON.stringify(p.levels) === JSON.stringify(lv)) && guard++ < 50);
-        opts.push({ location: fixed || pool[o % pool.length], levels: lv, optionId: '' });
+        let loc;
+        if (placeAttr && home) loc = resolvePlace(levelOf(placeAttr, lv[placeAttr.id]));
+        else { if (placeAttr) delete lv[placeAttr.id]; loc = fixed || pool[o % pool.length]; }
+        opts.push({ location: loc, levels: lv, optionId: '' });
       }
       tasks.push(opts);
     }
+  }
   }
   const levelOf = (attr, id) => { const l = attr.levels.find(x => (x.id ?? x) === id); return typeof l === 'object' ? l : { id: l, label: l }; };
   const showMarkers = cfg('showMarkers') !== false;
 
   // ---------- data ----------
   const rows = [];
+  const homeDp = homeCfg ? (homeCfg.recordDecimals ?? 2) : -1;
   const started = new Date().toISOString();
   const send = (type, extra = {}) => {
     const msg = Object.assign({ source: 'isometric-melbourne', type, study: studyId, pid, arm: arm.id, choiceSet: setId, seed }, extra);
@@ -155,9 +205,45 @@
 
   function intro() {
     const body = [].concat(cfg('intro') || []).map(t => el('p', {}, t));
-    const go = el('button', { type: 'button', onclick: () => task(0) }, 'Start');
+    const begin = () => { buildTasks(); task(0); };
+    const go = el('button', { type: 'button', onclick: () => (homeCfg ? homeStep(begin) : begin()) }, 'Start');
     app.replaceChildren(el('h1', {}, study.title || 'Study'), ...body, el('div', { class: 'next' }, go));
     go.focus();
+  }
+
+  // Ask for the participant's address, geocode it, and keep only the coordinates.
+  function homeStep(done) {
+    const input = el('input', { type: 'text', id: 'addr', autocomplete: 'street-address', style: 'width:min(100%,420px)' });
+    const status = el('p', { role: 'status' });
+    const list = el('div', {});
+    const cont = el('button', { type: 'button', disabled: '', onclick: done }, 'Continue');
+    const form = el('form', {}, el('p', {}, el('label', { for: 'addr' }, homeCfg.prompt || 'Please enter your home address in Melbourne.')),
+      el('p', {}, input, ' ', el('button', { type: 'submit' }, 'Find')));
+    form.onsubmit = async ev => {
+      ev.preventDefault();
+      const q = input.value.trim(); list.replaceChildren(); if (!q) return;
+      status.textContent = 'Searching…';
+      const [w, s, e, n] = meta.bbox;
+      const url = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
+        format: 'jsonv2', q, countrycodes: 'au', viewbox: `${w},${n},${e},${s}`, bounded: 1, limit: 6 });
+      try {
+        const hits = (await fetch(url).then(x => { if (!x.ok) throw new Error(); return x.json(); }))
+          .map(h => ({ name: h.display_name.replace(/, Victoria.*$/, ''), lon: +h.lon, lat: +h.lat }))
+          .filter(h => onMap(project(h.lon, h.lat)));
+        if (!hits.length) { status.textContent = 'No match found. Try adding your suburb.'; return; }
+        status.textContent = 'Choose your address:';
+        hits.forEach(h => list.append(el('p', {}, el('button', { type: 'button', class: 'choose', style: 'margin:0', onclick: () => {
+          home = { lon: h.lon, lat: h.lat };
+          status.textContent = 'Selected: ' + h.name; list.replaceChildren(); cont.disabled = false; cont.focus();
+        } }, h.name))));
+      } catch (err) { status.textContent = 'Address search is unavailable right now. Please try again.'; }
+    };
+    const kids = [el('h1', {}, study.title || 'Study'), form, status, list];
+    if (homeCfg.note) kids.push(el('p', { style: 'font-size:12px;opacity:.75' }, homeCfg.note));
+    const row = el('div', { class: 'next' });
+    if (homeCfg.required === false) row.append(el('button', { type: 'button', class: 'choose', style: 'margin:0 12px 0 0', onclick: done }, 'Skip'));
+    row.append(cont); kids.push(row);
+    app.replaceChildren(...kids); input.focus();
   }
 
   function task(t) {
@@ -200,7 +286,11 @@
       opts.forEach((o, i) => {
         const row = { pid, study: studyId, arm: arm.id, arm_forced: armForced ? 1 : 0, choice_set: setId, seed, started, mode,
           task: t + 1, option: LETTERS[i], option_id: o.optionId, location: o.location.name || '',
-          lon: o.location.lon, lat: o.location.lat };
+          // sites derived from the home address are saved no more precisely than the home itself
+          lon: o.location.fromHome ? (homeDp >= 0 ? +o.location.lon.toFixed(homeDp) : '') : +o.location.lon.toFixed(5),
+          lat: o.location.fromHome ? (homeDp >= 0 ? +o.location.lat.toFixed(homeDp) : '') : +o.location.lat.toFixed(5),
+          home_lon: home && homeDp >= 0 ? +home.lon.toFixed(homeDp) : '', home_lat: home && homeDp >= 0 ? +home.lat.toFixed(homeDp) : '',
+          dist_home_m: home ? Math.round(metres(o.location, home) / 10) * 10 : '' };
         (study.attributes || []).forEach(a => { row['attr_' + a.id] = a.id in o.levels && !hidden.has(a.id) ? o.levels[a.id] : ''; });
         Object.assign(row, { chosen: wantChoice ? (state.chosen === i ? 1 : 0) : '', rating: rating ? state.ratings[i] : '',
           rt_ms: rt, first_choice_ms: state.firstChoiceMs ?? '', choice_changes: state.changes,
@@ -232,6 +322,7 @@
         v.viewport.zoomTo(v.viewport.imageToViewportZoom(view.zoom), null, true);
         v.viewport.panTo(v.viewport.imageToViewportCoordinates(c.x, c.y), true);
         v.drawer.setImageSmoothingEnabled(view.zoom < 1);
+        if (home) addMarker(v, { label: homeCfg.markerLabel || 'Your home', colour: '#23252e', lon: home.lon, lat: home.lat });
         if (o.location.label) addMarker(v, { label: o.location.label, colour: '#23252e' }, o.location.lon, o.location.lat);
         if (showMarkers) attributes.forEach(a => { const lv = levelOf(a, o.levels[a.id]); if (lv && lv.marker) addMarker(v, lv.marker, o.location.lon, o.location.lat); });
         (arm.markers || []).forEach(m => addMarker(v, m, o.location.lon, o.location.lat));
@@ -257,6 +348,6 @@
     }
   }
 
-  send('ready', { tasks: tasks.length });
+  send('ready');
   intro();
 })();

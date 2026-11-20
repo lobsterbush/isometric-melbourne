@@ -1,0 +1,76 @@
+{
+  "title": "Changes to Melbourne streets",
+  "design": "conjoint",
+  "intro": [
+    "Councils across Melbourne are deciding how to use street space. You will see pairs of proposals, each shown on a map of a real street.",
+    "For each pair, choose the proposal you would rather see go ahead and say how much you would support each one."
+  ],
+  "prompt": "Which of these two proposals would you rather see go ahead?",
+  "tasks": 6,
+  "optionsPerTask": 2,
+  "randomizeAttributeOrder": true,
+  "view": { "zoom": 1.8, "lock": false },
+  "home": {
+    "prompt": "Some proposals will be shown near where you live. Please enter your home address in Melbourne.",
+    "note": "Your address is used only to position the maps. Only an approximate location (to about 1 km) is saved with your answers.",
+    "markerLabel": "Your home",
+    "required": true,
+    "recordDecimals": 2
+  },
+  "arms": [
+    { "id": "own_place" },
+    { "id": "generic_place", "home": false, "hideAttributes": ["place"] }
+  ],
+  "attributes": [
+    { "id": "place", "type": "place", "label": "Where", "levels": [
+      { "id": "own_street", "label": "Your street", "distance": 0 },
+      { "id": "nearby", "label": "About 1 km from your home", "distance": [800, 1300] },
+      { "id": "elsewhere", "label": "Another part of Melbourne", "pool": true, "minDistance": 8000 } ] },
+    { "id": "change", "label": "Proposed change", "levels": [
+      { "id": "bike_lane", "label": "Protected bike lane", "marker": { "label": "Proposed: protected bike lane", "east": 35, "north": 10, "colour": "#3f7d4e" } },
+      { "id": "bus_lane", "label": "Bus-only lane", "marker": { "label": "Proposed: bus-only lane", "east": 35, "north": 10, "colour": "#c86a48" } },
+      { "id": "footpath", "label": "Wider footpaths and street trees", "marker": { "label": "Proposed: wider footpaths and trees", "east": 35, "north": 10, "colour": "#7a8fa6" } },
+      { "id": "speed_30", "label": "30 km/h speed limit", "marker": { "label": "Proposed: 30 km/h limit", "east": 35, "north": 10, "colour": "#d8b84a" } } ] },
+    { "id": "tradeoff", "label": "What it takes away", "levels": [
+      { "id": "parking", "label": "On-street parking on one side" },
+      { "id": "lane", "label": "One lane of car traffic" },
+      { "id": "nothing", "label": "Nothing: parking and lanes stay" } ] },
+    { "id": "users", "label": "Mainly for", "levels": [
+      { "id": "residents", "label": "People who live on the street" },
+      { "id": "children", "label": "Children getting to school" },
+      { "id": "commuters", "label": "Commuters passing through" },
+      { "id": "delivery", "label": "Delivery riders and drivers" } ] },
+    { "id": "proposer", "label": "Proposed by", "levels": [
+      { "id": "residents_group", "label": "A local residents' group" },
+      { "id": "council", "label": "The local council" },
+      { "id": "state", "label": "The state government" } ] }
+  ],
+  "restrictions": [
+    { "change": "speed_30", "tradeoff": "parking" },
+    { "change": "speed_30", "tradeoff": "lane" },
+    { "change": "bus_lane", "tradeoff": "nothing" }
+  ],
+  "locations": [
+    { "name": "Brunswick", "lon": 144.9610, "lat": -37.7670 },
+    { "name": "Footscray", "lon": 144.8940, "lat": -37.7990 },
+    { "name": "Box Hill", "lon": 145.1260, "lat": -37.8200 },
+    { "name": "Clayton", "lon": 145.1210, "lat": -37.9250 },
+    { "name": "Preston", "lon": 145.0040, "lat": -37.7420 },
+    { "name": "Sunshine", "lon": 144.8320, "lat": -37.7880 },
+    { "name": "Glen Waverley", "lon": 145.1650, "lat": -37.8790 },
+    { "name": "Reservoir", "lon": 145.0070, "lat": -37.7170 },
+    { "name": "Bentleigh", "lon": 145.0370, "lat": -37.9180 },
+    { "name": "Werribee", "lon": 144.6610, "lat": -37.9010 },
+    { "name": "Dandenong", "lon": 145.2110, "lat": -37.9850 },
+    { "name": "Coburg", "lon": 144.9640, "lat": -37.7440 },
+    { "name": "St Kilda", "lon": 144.9800, "lat": -37.8660 },
+    { "name": "Richmond", "lon": 145.0000, "lat": -37.8230 },
+    { "name": "Frankston", "lon": 145.1270, "lat": -38.1420 },
+    { "name": "Ringwood", "lon": 145.2290, "lat": -37.8130 }
+  ],
+  "outcomes": {
+    "choice": true,
+    "rating": { "label": "How much would you support this proposal?", "min": 1, "max": 7, "minLabel": "Strongly oppose", "maxLabel": "Strongly support" }
+  },
+  "outro": "Thank you. Your answers have been recorded."
+}

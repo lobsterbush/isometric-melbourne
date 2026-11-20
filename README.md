@@ -66,8 +66,16 @@ one JSON file in `docs/studies/`; no code changes are needed to add one.
   named `choiceSets`, each a list of tasks, so different respondents can face different sets.
 - **Outcomes:** forced choice, a rating scale per option, or both.
 
-Two examples ship with the repo: `neighbourhood-choice` (paired conjoint, three arms) and
-`clinic-siting` (fixed sites, two framing arms crossed with two choice sets).
+- **The participant's own place:** a `home` block asks for the participant's address first. An
+  attribute with `"type": "place"` then puts each option on their own street (`distance: 0`), a set
+  distance away (`distance: [800, 1300]`, snapped to built-up land), or elsewhere (`pool: true`),
+  with their home marked on the map. Only coordinates rounded to `recordDecimals` (default 2,
+  about 1 km) are saved, for the home and for sites derived from it.
+
+Three examples ship with the repo: `street-changes` (transport proposals on the participant's own
+street, nearby, or elsewhere; one arm asks for the address and one uses generic places),
+`neighbourhood-choice` (paired conjoint, three arms) and `clinic-siting` (fixed sites, two framing
+arms crossed with two choice sets).
 
 Address parameters: `study` (required), `pid`, `arm`, `set`, `seed`, `mode=survey|lab`.
 

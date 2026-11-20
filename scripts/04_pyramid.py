@@ -6,6 +6,7 @@ lon/lat-to-pixel fit used by address search.
 Run from the project root: .venv/bin/python scripts/04_pyramid.py
 """
 
+import argparse
 import json
 import math
 import multiprocessing as mp
@@ -13,7 +14,7 @@ import multiprocessing as mp
 import numpy as np
 from PIL import Image
 
-from config import HEIGHT, ORIGIN_LONLAT, SITE, TILE, TILES, UP_BEARING_DEG, WIDTH, geographic_bbox, lonlat_to_screen
+from config import DATA, HEIGHT, ORIGIN_LONLAT, SITE, TILE, TILES, UP_BEARING_DEG, WIDTH, geographic_bbox, lonlat_to_screen
 
 MAX_LEVEL = math.ceil(math.log2(max(WIDTH, HEIGHT) / TILE))
 WATER_RGB = (72, 132, 176)
@@ -66,8 +67,26 @@ def fit_projection() -> dict:
     return {"lon0": ORIGIN_LONLAT[0], "lat0": ORIGIN_LONLAT[1], "terms": terms, "cx": cx.tolist(), "cy": cy.tolist()}
 
 
+MASK_CELL_X, MASK_CELL_Y = 100, 50  # screen pixels per mask cell: 100 m x 100 m on the ground
+
+
+def write_built_mask() -> dict:
+    """Write a coarse built-up mask (cells with several buildings) used to place nearby sites on streets."""
+    bbox = np.load(DATA / "prep_buildings.npz")["bbox"]
+    cx, cy = (bbox[:, 0] + bbox[:, 2]) / 2, (bbox[:, 1] + bbox[:, 3]) / 2
+    w, h = math.ceil(WIDTH / MASK_CELL_X), math.ceil(HEIGHT / MASK_CELL_Y)
+    counts, _, _ = np.histogram2d(cy, cx, bins=[h, w], range=[[0, h * MASK_CELL_Y], [0, w * MASK_CELL_X]])
+    Image.fromarray(((counts >= 6) * 255).astype(np.uint8), "L").save(SITE / "built_mask.png", optimize=True)
+    return {"file": "built_mask.png", "cellX": MASK_CELL_X, "cellY": MASK_CELL_Y}
+
+
 def main() -> None:
-    """Build all lower levels, then write viewer metadata."""
+    """Build all lower levels, then write viewer metadata (--meta-only skips the tiles)."""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--meta-only", action="store_true")
+    if ap.parse_args().meta_only:
+        write_meta()
+        return
     with mp.get_context("fork").Pool(10) as pool:
         for level in range(MAX_LEVEL - 1, -1, -1):
             (TILES / str(level)).mkdir(parents=True, exist_ok=True)
@@ -75,13 +94,18 @@ def main() -> None:
             jobs = [(level, x, y) for y in range(math.ceil(h / TILE)) for x in range(math.ceil(w / TILE))]
             pool.map(build_tile, jobs, chunksize=8)
             print(f"level {level}: {len(jobs)} tiles ({w}x{h})", flush=True)
+    write_meta()
+
+
+def write_meta() -> None:
+    """Write docs/map.json and the built-up mask."""
     places = []
     for name, lon, lat in PLACES:
         sx, sy = lonlat_to_screen(np.array([lon]), np.array([lat]))
         if 0 <= sx[0] < WIDTH and 0 <= sy[0] < HEIGHT:
             places.append({"name": name, "x": round(float(sx[0])), "y": round(float(sy[0]))})
     meta = {"width": WIDTH, "height": HEIGHT, "tile": TILE, "maxLevel": MAX_LEVEL,
-            "upBearing": UP_BEARING_DEG, "places": places, "proj": fit_projection(),
+            "upBearing": UP_BEARING_DEG, "places": places, "proj": fit_projection(), "mask": write_built_mask(),
             "bbox": [round(v, 4) for v in geographic_bbox()]}
     (SITE / "map.json").write_text(json.dumps(meta))
     print("wrote map.json with", len(places), "places")
