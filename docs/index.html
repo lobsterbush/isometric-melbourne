@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Isometric Melbourne</title>
+<style>
+  :root { --ink: #23252e; --paper: #f3ecd8; --water: #4884b0; --accent: #c86a48; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--water); color: var(--ink);
+    font: 13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow: hidden; }
+  #map { width: 100vw; height: 100vh; height: 100dvh; background: var(--water); }
+  .card { position: absolute; background: var(--paper); border: 2px solid var(--ink);
+    box-shadow: 4px 4px 0 var(--ink); }
+  #title { top: 16px; left: 16px; padding: 12px 14px 12px; max-width: 290px; }
+  #title h1 { margin: 0 0 2px; font-size: 19px; letter-spacing: 0.02em; }
+  #title p { margin: 0 0 10px; opacity: 0.8; }
+  #title select { width: 100%; font: inherit; color: var(--ink); background: #fffaf0;
+    border: 2px solid var(--ink); border-radius: 0; padding: 5px 6px; }
+  #search { display: flex; margin-top: 8px; }
+  #search input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: #fffaf0;
+    border: 2px solid var(--ink); border-right: 0; border-radius: 0; padding: 5px 6px; }
+  #search button { font: inherit; font-weight: 700; color: var(--paper); background: var(--ink);
+    border: 2px solid var(--ink); padding: 5px 9px; cursor: pointer; }
+  #search input:focus-visible, #search button:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+  #results { list-style: none; margin: 8px 0 0; padding: 0; max-height: 40vh; overflow-y: auto; }
+  #results li button { display: block; width: 100%; text-align: left; font: inherit; color: var(--ink);
+    background: none; border: 0; border-top: 1px solid rgba(35, 37, 46, 0.25); padding: 6px 2px; cursor: pointer; }
+  #results li button:hover, #results li button:focus-visible { background: #fff; outline: none; }
+  #status { margin: 8px 0 0; font-size: 11px; opacity: 0.8; }
+  #status:empty { display: none; }
+  .pin { width: 22px; height: 30px; pointer-events: none; filter: drop-shadow(2px 2px 0 rgba(35, 37, 46, 0.6)); }
+  #tools { top: 16px; right: 16px; display: flex; flex-direction: column; }
+  #tools button { width: 36px; height: 36px; font: 700 18px/1 ui-monospace, Menlo, monospace;
+    color: var(--ink); background: var(--paper); border: 0; border-bottom: 2px solid var(--ink); cursor: pointer; }
+  #tools button:last-child { border-bottom: 0; }
+  #tools button:hover, #title select:hover { background: #fff; }
+  #tools button:focus-visible, #title select:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+  #compass { bottom: 16px; left: 16px; width: 64px; height: 64px; padding: 4px; }
+  #credit { position: absolute; left: 96px; bottom: 16px; max-width: calc(100vw - 340px); font-size: 11px;
+    padding: 3px 7px; background: rgba(243, 236, 216, 0.92); border: 1px solid var(--ink); }
+  #credit a { color: var(--ink); }
+  .navigator { border: 2px solid var(--ink) !important; box-shadow: 4px 4px 0 var(--ink);
+    margin: 0 16px 16px 0 !important; background: var(--water) !important; }
+  @media (max-width: 640px) {
+    #title { max-width: none; right: 68px; }
+    #title p { display: none; }
+    #title h1 { margin-bottom: 8px; font-size: 16px; }
+    #credit { left: 16px; max-width: calc(100vw - 32px); bottom: 6px; font-size: 10px; }
+    #compass { bottom: 40px; }
+    .navigator { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="map" aria-label="Zoomable isometric pixel-art map of Greater Melbourne"></div>
+
+<div id="title" class="card">
+  <h1>Isometric Melbourne</h1>
+  <p>Greater Melbourne and its suburbs, drawn building by building in pixels.</p>
+  <select id="places" aria-label="Jump to a place"><option value="">Jump to…</option></select>
+  <form id="search" role="search">
+    <input id="q" type="search" placeholder="Find an address…" aria-label="Find an address" autocomplete="street-address">
+    <button type="submit">Go</button>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+  <ul id="results"></ul>
+</div>
+
+<div id="tools" class="card">
+  <button id="zin" aria-label="Zoom in">+</button>
+  <button id="zout" aria-label="Zoom out">−</button>
+  <button id="home" aria-label="Show the whole map" title="Whole map">▢</button>
+</div>
+
+<div id="compass" class="card" title="North">
+  <svg viewBox="-30 -30 60 60" width="52" height="52" aria-label="Compass showing north">
+    <ellipse cx="0" cy="0" rx="24" ry="12" fill="none" stroke="#23252e" stroke-width="2"/>
+    <g id="needle"></g>
+  </svg>
+</div>
+
+<div id="credit">
+  Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>,
+  <a href="https://overturemaps.org">Overture Maps Foundation</a>.
+  Address search by <a href="https://nominatim.org">Nominatim</a>.
+  Inspired by <a href="https://cannoneyed.com/isometric-nyc/">Isometric NYC</a> by Andy Coenen.
+</div>
+
+<script src="vendor/openseadragon.min.js"></script>
+<script>
+(async function () {
+  const meta = await fetch('map.json').then(r => r.json());
+  const viewer = OpenSeadragon({
+    element: 'map',
+    showNavigationControl: false,
+    showNavigator: true,
+    navigatorPosition: 'BOTTOM_RIGHT',
+    navigatorSizeRatio: 0.15,
+    navigatorBackground: '#4884b0',
+    tileSources: {
+      width: meta.width, height: meta.height, tileSize: meta.tile, minLevel: 0, maxLevel: meta.maxLevel,
+      getTileUrl: (l, x, y) => `tiles/${l}/${x}_${y}.webp`
+    },
+    maxZoomPixelRatio: 6,
+    minZoomImageRatio: 0.8,
+    visibilityRatio: 0.7,
+    constrainDuringPan: true,
+    animationTime: 0.5,
+    zoomPerScroll: 1.4,
+    imageLoaderLimit: 10,
+    gestureSettingsMouse: { clickToZoom: false, dblClickToZoom: true }
+  });
+  const vp = viewer.viewport;
+
+  function goTo(x, y, imageZoom, immediately) {
+    vp.zoomTo(vp.imageToViewportZoom(imageZoom), null, immediately);
+    vp.panTo(vp.imageToViewportCoordinates(x, y), immediately);
+  }
+  function crisp() {
+    // Nearest-neighbour when magnifying keeps the pixels square; smooth when shrinking.
+    viewer.drawer.setImageSmoothingEnabled(vp.viewportToImageZoom(vp.getZoom(true)) < 1);
+  }
+
+  viewer.addHandler('open', () => {
+    const m = location.hash.match(/^#(-?[\d.]+),(-?[\d.]+),([\d.]+)$/);
+    if (m) goTo(+m[1], +m[2], +m[3], true);
+    else { const c = meta.places[0]; goTo(c.x, c.y, 0.7, true); }
+    crisp();
+  });
+  viewer.addHandler('animation', crisp);
+  viewer.addHandler('animation-finish', () => {
+    const c = vp.viewportToImageCoordinates(vp.getCenter());
+    const z = vp.viewportToImageZoom(vp.getZoom());
+    history.replaceState(null, '', `#${Math.round(c.x)},${Math.round(c.y)},${z.toFixed(3)}`);
+  });
+
+  const sel = document.getElementById('places');
+  meta.places.forEach((p, i) => sel.add(new Option(p.name, i)));
+  sel.addEventListener('change', () => {
+    if (sel.value === '') return;
+    const p = meta.places[+sel.value];
+    goTo(p.x, p.y, 1.5, false);
+    sel.value = '';
+  });
+  document.getElementById('zin').onclick = () => { vp.zoomBy(1.6); vp.applyConstraints(); };
+  document.getElementById('zout').onclick = () => { vp.zoomBy(1 / 1.6); vp.applyConstraints(); };
+  document.getElementById('home').onclick = () => vp.goHome();
+
+  // Address search: geocode with OpenStreetMap Nominatim, then project lon/lat to map pixels.
+  function project(lon, lat) {
+    const u = lon - meta.proj.lon0, v = lat - meta.proj.lat0;
+    let x = 0, y = 0;
+    meta.proj.terms.forEach(([i, j], k) => {
+      const t = Math.pow(u, i) * Math.pow(v, j);
+      x += meta.proj.cx[k] * t; y += meta.proj.cy[k] * t;
+    });
+    return { x, y };
+  }
+  const pin = document.createElement('div');
+  pin.className = 'pin';
+  pin.innerHTML = '<svg viewBox="0 0 22 30" width="22" height="30"><path d="M11 29 L3 13 A9 9 0 1 1 19 13 Z" fill="#c86a48" stroke="#23252e" stroke-width="2"/><rect x="8" y="6" width="6" height="6" fill="#f3ecd8" stroke="#23252e" stroke-width="2"/></svg>';
+  function dropPin(p) {
+    viewer.removeOverlay(pin);
+    viewer.addOverlay({ element: pin, location: vp.imageToViewportCoordinates(p.x, p.y),
+      placement: OpenSeadragon.Placement.BOTTOM });
+    goTo(p.x, p.y, 2.5, false);
+  }
+  const status = document.getElementById('status'), results = document.getElementById('results');
+  document.getElementById('search').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const q = document.getElementById('q').value.trim();
+    results.replaceChildren();
+    if (!q) { status.textContent = ''; return; }
+    status.textContent = 'Searching…';
+    const [w, s, e, n] = meta.bbox;
+    const url = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
+      format: 'jsonv2', q, countrycodes: 'au', viewbox: `${w},${n},${e},${s}`, bounded: 1, limit: 8 });
+    try {
+      const hits = (await fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }))
+        .map(h => ({ name: h.display_name, p: project(+h.lon, +h.lat) }))
+        .filter(h => h.p.x >= 0 && h.p.x < meta.width && h.p.y >= 0 && h.p.y < meta.height);
+      if (!hits.length) { status.textContent = 'No match on this map. Try adding the suburb.'; return; }
+      status.textContent = hits.length === 1 ? '' : `${hits.length} matches`;
+      hits.forEach(h => {
+        const li = document.createElement('li'), b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = h.name.replace(/, Victoria.*$/, '');
+        b.onclick = () => dropPin(h.p);
+        li.append(b); results.append(li);
+      });
+      dropPin(hits[0].p);
+    } catch (err) {
+      status.textContent = 'Search is unavailable right now.';
+    }
+  });
+
+  // North on screen: rotate by the map bearing, then flatten vertically for the isometric tilt.
+  const b = meta.upBearing * Math.PI / 180;
+  const nx = -Math.sin(b) * 24, ny = -Math.cos(b) * 12;
+  document.getElementById('needle').innerHTML =
+    `<line x1="${-nx}" y1="${-ny}" x2="${nx}" y2="${ny}" stroke="#23252e" stroke-width="2"/>` +
+    `<circle cx="${nx}" cy="${ny}" r="4" fill="#c86a48" stroke="#23252e" stroke-width="2"/>` +
+    `<text x="${nx * 1.05 - 9}" y="${ny - 8}" font-size="11" font-weight="700" fill="#23252e" font-family="ui-monospace,Menlo,monospace">N</text>`;
+})();
+</script>
+</body>
+</html>
