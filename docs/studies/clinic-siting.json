@@ -1,0 +1,52 @@
+{
+  "title": "Where should the new clinic go?",
+  "design": "sets",
+  "intro": [
+    "The state government plans to open one new community health clinic in Melbourne's south-east.",
+    "You will see candidate sites on a map. For each group of sites, choose the one you think should get the clinic."
+  ],
+  "prompt": "Which site should get the new community health clinic?",
+  "showLocationNames": true,
+  "randomizeTaskOrder": true,
+  "randomizeOptionOrder": true,
+  "view": { "zoom": 0.9, "lock": false },
+  "arms": [
+    { "id": "need_frame", "choiceSet": "three_sites",
+      "intro": [ "The state government plans to open one new community health clinic in Melbourne's south-east.",
+                 "Officials say the clinic should go where residents currently have the least access to care.",
+                 "For each group of sites, choose the one you think should get the clinic." ] },
+    { "id": "cost_frame", "choiceSet": "three_sites",
+      "intro": [ "The state government plans to open one new community health clinic in Melbourne's south-east.",
+                 "Officials say the clinic should go where it costs taxpayers the least to build and run.",
+                 "For each group of sites, choose the one you think should get the clinic." ] },
+    { "id": "need_frame_pairs", "choiceSet": "pairs",
+      "intro": [ "The state government plans to open one new community health clinic in Melbourne's south-east.",
+                 "Officials say the clinic should go where residents currently have the least access to care.",
+                 "For each pair of sites, choose the one you think should get the clinic." ] },
+    { "id": "cost_frame_pairs", "choiceSet": "pairs",
+      "intro": [ "The state government plans to open one new community health clinic in Melbourne's south-east.",
+                 "Officials say the clinic should go where it costs taxpayers the least to build and run.",
+                 "For each pair of sites, choose the one you think should get the clinic." ] }
+  ],
+  "attributes": [
+    { "id": "gp", "label": "Nearest existing GP", "levels": ["400 m", "1.2 km", "2.5 km", "3.1 km"] },
+    { "id": "cost", "label": "Build cost", "levels": ["$6 million", "$9 million", "$12 million", "$14 million"] },
+    { "id": "transit", "label": "Public transport", "levels": ["Train and bus", "Bus only", "None within 1 km"] }
+  ],
+  "options": [
+    { "id": "dandenong", "name": "Dandenong", "lon": 145.2130, "lat": -37.9870, "label": "Site",
+      "attributes": { "gp": "400 m", "cost": "$14 million", "transit": "Train and bus" } },
+    { "id": "cranbourne", "name": "Cranbourne East", "lon": 145.3010, "lat": -38.1090, "label": "Site",
+      "attributes": { "gp": "2.5 km", "cost": "$9 million", "transit": "Bus only" } },
+    { "id": "clyde", "name": "Clyde North", "lon": 145.3420, "lat": -38.1010, "label": "Site",
+      "attributes": { "gp": "3.1 km", "cost": "$6 million", "transit": "None within 1 km" } },
+    { "id": "springvale", "name": "Springvale", "lon": 145.1530, "lat": -37.9490, "label": "Site",
+      "attributes": { "gp": "1.2 km", "cost": "$12 million", "transit": "Train and bus" } }
+  ],
+  "choiceSets": [
+    { "id": "three_sites", "tasks": [ ["dandenong", "cranbourne", "clyde"], ["springvale", "cranbourne", "clyde"], ["dandenong", "springvale", "clyde"] ] },
+    { "id": "pairs", "tasks": [ ["dandenong", "clyde"], ["springvale", "cranbourne"], ["dandenong", "cranbourne"], ["springvale", "clyde"] ] }
+  ],
+  "outcomes": { "choice": true },
+  "outro": "Thank you. Your answers have been recorded."
+}

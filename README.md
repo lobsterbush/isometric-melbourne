@@ -50,6 +50,36 @@ metre; doubling it quadruples tile count and disk use). Colours are in `scripts/
 - `data/` downloaded and prepared data (not in version control)
 - `docs/` the static viewer (`index.html`, OpenSeadragon, `tiles/`), served by GitHub Pages
 
+## Experiments
+
+`docs/experiment.html` turns the map into a choice task for lab and survey experiments. A study is
+one JSON file in `docs/studies/`; no code changes are needed to add one.
+
+- **Treatments (between subjects):** `arms` in the study file. An arm can change the introduction
+  and prompt, hide attributes, draw or suppress map markers, lock the map, change the zoom, or pin
+  a choice set. Arms are assigned at random from a seed derived from the participant ID, or forced
+  with `?arm=`.
+- **Treatments (within subjects):** `attributes` with randomised `levels`, as in a conjoint. A level
+  can carry a `marker`, so the manipulation appears on the map as well as in the table.
+- **Choice sets:** `design: "conjoint"` draws profiles for `optionsPerTask` options over `tasks`
+  rounds, with `restrictions` for excluded combinations. `design: "sets"` uses fixed `options` and
+  named `choiceSets`, each a list of tasks, so different respondents can face different sets.
+- **Outcomes:** forced choice, a rating scale per option, or both.
+
+Two examples ship with the repo: `neighbourhood-choice` (paired conjoint, three arms) and
+`clinic-siting` (fixed sites, two framing arms crossed with two choice sets).
+
+Address parameters: `study` (required), `pid`, `arm`, `set`, `seed`, `mode=survey|lab`.
+
+- **Survey use:** paste `docs/qualtrics_snippet.js` into a Qualtrics question. The task runs in an
+  iframe and writes the arm, choice set, completion code and all rows into embedded data.
+- **Lab use:** open `docs/lab.html`, enter the study and participant ID, and run the session. Data
+  stay in that browser until downloaded as CSV from the same page.
+
+Data are long format, one row per option per task: `pid`, `arm`, `choice_set`, `task`, `option`,
+location, one `attr_*` column per attribute, `chosen`, `rating`, response time, time to first
+choice, choice changes, and map drags and zooms per option. Cluster standard errors by `pid`.
+
 ## Address search
 
 The viewer geocodes typed addresses with the public OpenStreetMap Nominatim API, restricted to the

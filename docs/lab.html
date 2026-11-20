@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab console</title>
+<style>
+  :root { --ink: #23252e; --paper: #f3ecd8; --accent: #c86a48; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; }
+  label { display: block; margin: 10px 0 2px; }
+  input, select { font: inherit; padding: 7px 8px; border: 2px solid var(--ink); background: #fff; width: 100%; max-width: 360px; border-radius: 0; }
+  button { font: inherit; font-weight: 700; color: var(--paper); background: var(--ink); border: 2px solid var(--ink); padding: 8px 16px; cursor: pointer; margin: 12px 8px 0 0; }
+  button.quiet { background: #fffaf0; color: var(--ink); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-top: 1px solid rgba(35,37,46,.25); }
+  .note { font-size: 12px; opacity: .75; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lab console</h1>
+  <p class="note">Sessions run in lab mode are stored in this browser on this computer until you download and clear them.</p>
+
+  <h2>Start a participant</h2>
+  <form id="start">
+    <label for="study">Study</label>
+    <input id="study" list="studies" required placeholder="neighbourhood-choice">
+    <datalist id="studies"><option value="neighbourhood-choice"><option value="clinic-siting"></datalist>
+    <label for="pid">Participant ID</label>
+    <input id="pid" required autocomplete="off">
+    <label for="arm">Treatment arm (leave blank to randomise)</label>
+    <input id="arm" autocomplete="off">
+    <label for="set">Choice set (leave blank for the arm's set or a random one)</label>
+    <input id="set" autocomplete="off">
+    <button type="submit">Start</button>
+  </form>
+
+  <h2>Stored data</h2>
+  <table id="stored"><thead><tr><th>Study</th><th>Participants</th><th>Rows</th><th></th></tr></thead><tbody></tbody></table>
+  <p class="note" id="none" hidden>No lab sessions stored in this browser.</p>
+</main>
+<script>
+(function () {
+  document.getElementById('start').onsubmit = ev => {
+    ev.preventDefault();
+    const q = new URLSearchParams({ study: study.value.trim(), pid: pid.value.trim(), mode: 'lab' });
+    if (arm.value.trim()) q.set('arm', arm.value.trim());
+    if (set.value.trim()) q.set('set', set.value.trim());
+    location.href = 'experiment.html?' + q;
+  };
+  const csv = rows => {
+    const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+    const cell = v => { v = v === undefined || v === null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    return [cols.join(',')].concat(rows.map(r => cols.map(c => cell(r[c])).join(','))).join('\n');
+  };
+  function render() {
+    const body = document.querySelector('#stored tbody'); body.replaceChildren();
+    let any = false;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key.startsWith('isomelb:')) continue;
+      any = true;
+      const rows = JSON.parse(localStorage.getItem(key) || '[]'), name = key.slice(8);
+      const tr = document.createElement('tr');
+      const dl = document.createElement('button'); dl.textContent = 'Download CSV';
+      dl.onclick = () => { const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv(rows)], { type: 'text/csv' }));
+        a.download = `${name}_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); };
+      const rm = document.createElement('button'); rm.textContent = 'Clear'; rm.className = 'quiet';
+      rm.onclick = () => { if (confirm(`Delete all stored rows for "${name}" from this browser? Download first if you need them.`)) { localStorage.removeItem(key); render(); } };
+      const td = t => { const c = document.createElement('td'); c.append(t); return c; };
+      const actions = document.createElement('td'); actions.append(dl, rm);
+      tr.append(td(name), td(String(new Set(rows.map(r => r.pid)).size)), td(String(rows.length)), actions);
+      body.append(tr);
+    }
+    document.getElementById('none').hidden = any;
+    document.getElementById('stored').hidden = !any;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
