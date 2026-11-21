@@ -19,7 +19,7 @@
   },
   "arms": [
     { "id": "own_place" },
-    { "id": "generic_place", "home": false, "hideAttributes": ["place"] }
+    { "id": "generic_place", "weight": 0, "home": false, "hideAttributes": ["place"] }
   ],
   "attributes": [
     { "id": "place", "type": "place", "label": "Where", "levels": [

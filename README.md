@@ -73,7 +73,7 @@ one JSON file in `docs/studies/`; no code changes are needed to add one.
   about 1 km) are saved, for the home and for sites derived from it.
 
 Three examples ship with the repo: `street-changes` (transport proposals on the participant's own
-street, nearby, or elsewhere; one arm asks for the address and one uses generic places),
+street, nearby, or elsewhere; everyone gets the address arm by default; the generic-place control has weight 0, so add `&arm=generic_place` to see it or give it a positive `weight` to randomise),
 `neighbourhood-choice` (paired conjoint, three arms) and `clinic-siting` (fixed sites, two framing
 arms crossed with two choice sets).
 
